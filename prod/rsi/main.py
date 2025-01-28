@@ -21,40 +21,45 @@ updating = False
 updating_lock = threading.Lock()
 
 def fetch_rsi(symbols):
-    """
-    Функция для получения и обработки данных RSI для заданных символов.
-    Преобразует данные в JSON-сериализуемый формат.
-    """
-    local_run_data = []
-    for pair in symbols:
-        data = lr.get_data_rsi(pair['symbol'], pair['timeframe'], pair['limit'], pair['rsi_period'])
-        data = lr.show_data(data)
+    try:
+        """
+        Функция для получения и обработки данных RSI для заданных символов.
+        Преобразует данные в JSON-сериализуемый формат.
+        """
+        local_run_data = []
+        for pair in symbols:
+            data = lr.get_data_rsi(pair['symbol'], pair['timeframe'], pair['limit'], pair['rsi_period'])
+            data = lr.show_data(data)
 
-        # Преобразуем данные в сериализуемый формат
-        serializable_data = {
-            'symbol': pair['symbol'],
-            'timeframe': pair['timeframe'],
-            'limit': pair['limit'],
-            'rsi_period': pair['rsi_period'],
-            'data': []
-        }
+            # Преобразуем данные в сериализуемый формат
+            serializable_data = {
+                'symbol': pair['symbol'],
+                'timeframe': pair['timeframe'],
+                'limit': pair['limit'],
+                'rsi_period': pair['rsi_period'],
+                'data': []
+            }
 
-        for key, value in data.items():
-            # value is a list: [Timestamp, price, rsi]
-            timestamp, price, rsi = value
-            serializable_data['data'].append({
-                'index': key,
-                'timestamp': timestamp.isoformat(),  # Преобразуем Timestamp в строку
-                'price': price,
-                'rsi': rsi
-            })
+            for key, value in data.items():
+                # value is a list: [Timestamp, price, rsi]
+                timestamp, price, rsi = value
+                serializable_data['data'].append({
+                    'index': key,
+                    'timestamp': timestamp.isoformat(),  # Преобразуем Timestamp в строку
+                    'price': price,
+                    'rsi': rsi
+                })
 
-        local_run_data.append(serializable_data)
+            local_run_data.append(serializable_data)
 
-    with data_lock:
-        global run_data
-        run_data = local_run_data
-    print(time.ctime(), " Data fetched successfully")
+        with data_lock:
+            global run_data
+            run_data = local_run_data
+            
+            print(time.ctime(), " Data fetched successfully")
+    except Exception as exp:
+        print(exp)
+            
 
 def periodic_fetch():
     """
@@ -63,6 +68,14 @@ def periodic_fetch():
     while True:
         fetch_rsi(symbs)
         time.sleep(30)
+
+
+@app.after_request
+def add_header(response):
+    response.headers['Cache-Control'] = 'no-store, no-cache, must-revalidate, max-age=0'
+    response.headers['Pragma'] = 'no-cache'
+    response.headers['Expires'] = '0'
+    return response
 
 @app.route('/fetch', methods=['GET'])
 def fetch_rsi_endpoint():
@@ -90,4 +103,5 @@ def get_data():
         return jsonify(run_data)
 
 if __name__ == "__main__":
-    app.run(debug=True)
+    app.run(debug=True, port=5001)
+
